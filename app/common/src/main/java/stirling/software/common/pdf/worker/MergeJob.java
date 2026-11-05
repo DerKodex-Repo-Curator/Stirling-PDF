@@ -140,20 +140,11 @@ public record MergeJob(
                 return pageCounts;
             }
             BookmarkTree combinedTree = buildCombinedBookmarkTree(pageOffsets, sourceBookmarks);
-            if (Boolean.getBoolean("jpdfium.merge.qpdfDirect") && docs.size() > 1) {
-                return qpdfDirect(docs, combinedTree, pageCounts);
-            }
             if (docs.size() == 1) {
                 PdfBookmarkEditor.setBookmarks(docs.getFirst(), combinedTree, output);
                 return pageCounts;
             }
-            try (PdfDocument merged = PdfMerge.merge(docs)) {
-                if (combinedTree.entries().isEmpty()) {
-                    merged.save(output);
-                } else {
-                    PdfBookmarkEditor.setBookmarks(merged, combinedTree, output);
-                }
-            }
+            return mergeWithQpdf(docs, combinedTree, pageCounts);
         } catch (RuntimeException e) {
             throw new IOException("JPDFium merge failed", e);
         } finally {
@@ -164,11 +155,10 @@ public record MergeJob(
                 }
             }
         }
-        return pageCounts;
     }
 
     // qpdf merges the original files outside the PDFium lock; PDFium only re-adds bookmarks.
-    private int[] qpdfDirect(List<PdfDocument> docs, BookmarkTree tree, int[] pageCounts)
+    private int[] mergeWithQpdf(List<PdfDocument> docs, BookmarkTree tree, int[] pageCounts)
             throws IOException {
         for (PdfDocument doc : docs) {
             doc.close();
